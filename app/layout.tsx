@@ -6,8 +6,10 @@ import "./globals.css";
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
-  const metadataBase = new URL(host ? `${protocol}://${host}` : "http://localhost:3000");
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
+  const metadataBase = new URL(
+    host ? `${protocol}://${host}` : "https://wordchain.sartajalam.in",
+  );
   return {
     metadataBase,
     applicationName: SITE_NAME,
@@ -30,6 +32,10 @@ export async function generateMetadata(): Promise<Metadata> {
     category: "games",
     referrer: "origin-when-cross-origin",
     formatDetection: { email: false, address: false, telephone: false },
+    themeColor: [
+      { media: "(prefers-color-scheme: light)", color: "#146cda" },
+      { media: "(prefers-color-scheme: dark)", color: "#0c1625" },
+    ],
     robots: {
       index: true,
       follow: true,
@@ -48,13 +54,20 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: SITE_NAME,
       locale: "en_US",
       url: metadataBase,
-      images: [{ url: "/og.png", width: 1536, height: 1024 }],
+      images: [
+        {
+          url: "/og.jpg",
+          width: 1200,
+          height: 630,
+          alt: "Word Chain Challenge — link words and play against WordBot",
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title: SITE_NAME,
       description: SITE_DESCRIPTION,
-      images: ["/og.png"],
+      images: ["/og.jpg"],
     },
   };
 }

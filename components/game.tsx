@@ -28,6 +28,7 @@ export function Game() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [checking, setChecking] = useState(false);
   const [machineError, setMachineError] = useState("");
+  const [successFlash, setSuccessFlash] = useState<0 | 1 | null>(null);
   const [confirmAction, setConfirmAction] = useState<"replay" | "reset" | null>(
     null,
   );
@@ -35,6 +36,8 @@ export function Game() {
     null,
     null,
   ]);
+  const confirmCancelRef = useRef<HTMLButtonElement | null>(null);
+  const lastFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     try {
@@ -64,6 +67,27 @@ export function Game() {
     if (!game || checking || machineError) return;
     inputRefs.current[game.currentPlayerIndex]?.focus();
   }, [checking, game, machineError]);
+
+  useEffect(() => {
+    if (!confirmAction) return;
+    lastFocusRef.current = document.activeElement as HTMLElement | null;
+    confirmCancelRef.current?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setConfirmAction(null);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      lastFocusRef.current?.focus?.();
+    };
+  }, [confirmAction]);
+
+  useEffect(() => {
+    if (successFlash === null) return;
+    const timer = window.setTimeout(() => setSuccessFlash(null), 900);
+    return () => window.clearTimeout(timer);
+  }, [successFlash]);
 
   function startGame(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -148,6 +172,7 @@ export function Game() {
 
       const nextGame = recordTurn(game, playerIndex, localResult.word);
       setGame(nextGame);
+      setSuccessFlash(playerIndex);
       setValues((current) => {
         const next: [string, string] = [...current];
         next[playerIndex] = "";
@@ -189,6 +214,7 @@ export function Game() {
     setValues(["", ""]);
     setErrors({});
     setMachineError("");
+    setSuccessFlash(null);
     setConfirmAction(null);
   }
 
@@ -199,7 +225,19 @@ export function Game() {
     setValues(["", ""]);
     setErrors({});
     setMachineError("");
+    setSuccessFlash(null);
     setConfirmAction(null);
+  }
+
+  if (!hydrated) {
+    return (
+      <section className="hydrate-section" aria-busy="true" aria-live="polite">
+        <div className="hydrate-card">
+          <span className="hydrate-loader" aria-hidden="true" />
+          <p>Loading your game…</p>
+        </div>
+      </section>
+    );
   }
 
   if (!game) {
@@ -207,20 +245,30 @@ export function Game() {
       <section className="setup-section">
         <div className="hero-copy">
           <span className="eyebrow">Think fast. Link words. Have fun.</span>
-          <h1>Every ending starts a <em>new word.</em></h1>
+          <h1>
+            Every ending starts a <em>new word.</em>
+          </h1>
           <p>
             A friendly word-chain challenge for curious minds. Pick a mode, add
             your name, and keep the chain alive!
           </p>
           <div className="rule-pills" aria-label="Quick rules">
-            <span><b>+1</b> correct word</span>
-            <span><b>−1</b> pass</span>
-            <span><b>0</b> spelling error</span>
+            <span>
+              <b>+1</b> correct word
+            </span>
+            <span>
+              <b>−1</b> pass
+            </span>
+            <span>
+              <b>0</b> spelling error
+            </span>
           </div>
         </div>
 
         <form className="setup-card" onSubmit={startGame} noValidate>
-          <div className="step-label"><span>1</span> Choose how to play</div>
+          <div className="step-label">
+            <span>1</span> Choose how to play
+          </div>
           <div className="mode-grid" role="radiogroup" aria-label="Game mode">
             <label className={`mode-card ${mode === "machine" ? "selected" : ""}`}>
               <input
@@ -230,7 +278,9 @@ export function Game() {
                 checked={mode === "machine"}
                 onChange={() => setMode("machine")}
               />
-              <span className="mode-icon" aria-hidden="true">✦</span>
+              <span className="mode-icon" aria-hidden="true">
+                ✦
+              </span>
               <strong>Play with WordBot</strong>
               <small>Solo challenge</small>
             </label>
@@ -242,13 +292,17 @@ export function Game() {
                 checked={mode === "friend"}
                 onChange={() => setMode("friend")}
               />
-              <span className="mode-icon coral" aria-hidden="true">●●</span>
+              <span className="mode-icon coral" aria-hidden="true">
+                ●●
+              </span>
               <strong>Play with a friend</strong>
               <small>Take turns together</small>
             </label>
           </div>
 
-          <div className="step-label"><span>2</span> Who&apos;s playing?</div>
+          <div className="step-label">
+            <span>2</span> Who&apos;s playing?
+          </div>
           <div className="name-fields">
             <label>
               <span>{mode === "friend" ? "Player 1 name" : "Your name"}</span>
@@ -272,7 +326,11 @@ export function Game() {
               </label>
             )}
           </div>
-          {setupError && <p className="form-error" role="alert">{setupError}</p>}
+          {setupError && (
+            <p className="form-error" role="alert">
+              {setupError}
+            </p>
+          )}
           <button className="primary-button start-button" type="submit">
             Start the challenge <span aria-hidden="true">→</span>
           </button>
@@ -289,24 +347,46 @@ export function Game() {
     <section className="game-section">
       <div className="game-topbar">
         <div>
-          <span className="eyebrow">{game.mode === "machine" ? "Solo challenge" : "Friend challenge"}</span>
+          <span className="eyebrow">
+            {game.mode === "machine" ? "Solo challenge" : "Friend challenge"}
+          </span>
           <h1>Keep the chain going!</h1>
         </div>
         <div className="game-actions">
-          <button type="button" className="ghost-button" onClick={() => setConfirmAction("replay")}>Play again</button>
-          <button type="button" className="ghost-button danger" onClick={() => setConfirmAction("reset")}>Reset</button>
+          <button type="button" className="ghost-button" onClick={() => setConfirmAction("replay")}>
+            Play again
+          </button>
+          <button
+            type="button"
+            className="ghost-button danger"
+            onClick={() => setConfirmAction("reset")}
+          >
+            Reset
+          </button>
         </div>
       </div>
 
       <div className="scoreboard" aria-label="Scores">
         {game.players.map((player, index) => (
           <article
-            className={`score-card player-${index + 1} ${game.currentPlayerIndex === index ? "active" : ""}`}
+            className={`score-card player-${index + 1} ${game.currentPlayerIndex === index ? "active" : ""} ${successFlash === index ? "score-bump" : ""}`}
             key={player.id}
           >
-            <div className="avatar" aria-hidden="true">{player.isMachine ? "✦" : player.name[0].toUpperCase()}</div>
-            <div><small>{game.currentPlayerIndex === index ? "Playing now" : "Waiting"}</small><strong>{player.name}</strong></div>
-            <span className="score"><b>{player.score}</b> pts</span>
+            <div className="avatar" aria-hidden="true">
+              {player.isMachine ? "✦" : player.name[0].toUpperCase()}
+            </div>
+            <div>
+              <small>{game.currentPlayerIndex === index ? "Playing now" : "Waiting"}</small>
+              <strong>{player.name}</strong>
+            </div>
+            <span className="score">
+              <b>{player.score}</b> pts
+              {successFlash === index && (
+                <span className="plus-one" aria-hidden="true">
+                  +1
+                </span>
+              )}
+            </span>
           </article>
         ))}
       </div>
@@ -315,9 +395,16 @@ export function Game() {
         <div className="play-panel">
           <div className="letter-prompt" aria-live="polite">
             {letter ? (
-              <><span>Next word starts with</span><strong>{letter.toUpperCase()}</strong></>
+              <>
+                <span>Next word starts with</span>
+                <strong>{letter.toUpperCase()}</strong>
+              </>
             ) : (
-              <><span>Start with</span><strong>ANY</strong><span>letter</span></>
+              <>
+                <span>Start with</span>
+                <strong>ANY</strong>
+                <span>letter</span>
+              </>
             )}
           </div>
 
@@ -326,6 +413,7 @@ export function Game() {
               const playerIndex = index as 0 | 1;
               const isActive = game.currentPlayerIndex === playerIndex;
               const isMachine = player.isMachine;
+              const hasError = Boolean(errors[playerIndex]);
 
               if (isMachine) {
                 return (
@@ -334,7 +422,9 @@ export function Game() {
                     key={player.id}
                     aria-live="polite"
                   >
-                    <div className="bot-orb" aria-hidden="true">✦</div>
+                    <div className="bot-orb" aria-hidden="true">
+                      ✦
+                    </div>
                     <div>
                       <strong>WordBot</strong>
                       <p>
@@ -353,9 +443,10 @@ export function Game() {
 
               return (
                 <form
-                  className={`turn-card ${isActive ? "active" : ""}`}
+                  className={`turn-card ${isActive ? "active" : ""} ${hasError ? "has-error" : ""} ${successFlash === playerIndex ? "just-scored" : ""}`}
                   key={player.id}
                   onSubmit={(event) => submitWord(event, playerIndex)}
+                  aria-busy={checking && isActive}
                 >
                   <label htmlFor={`word-${player.id}`}>
                     <span>{player.name}&apos;s word</span>
@@ -377,29 +468,66 @@ export function Game() {
                         });
                         setErrors((current) => ({ ...current, [playerIndex]: "" }));
                       }}
-                      placeholder={isMachine ? (checking ? "WordBot is thinking…" : "WordBot") : letter ? `${letter.toUpperCase()}…` : "Type any word…"}
+                      placeholder={
+                        isMachine
+                          ? checking
+                            ? "WordBot is thinking…"
+                            : "WordBot"
+                          : letter
+                            ? `${letter.toUpperCase()}…`
+                            : "Type any word…"
+                      }
                       disabled={!isActive || isMachine || checking}
                       autoCapitalize="none"
                       autoCorrect="off"
                       spellCheck="false"
+                      aria-invalid={hasError}
+                      aria-errormessage={hasError ? `feedback-${player.id}` : undefined}
                       aria-describedby={`feedback-${player.id}`}
                     />
-                    <button className="submit-word" type="submit" disabled={!isActive || checking} aria-label={`Submit ${player.name}'s word`}>
+                    <button
+                      className="submit-word"
+                      type="submit"
+                      disabled={!isActive || checking}
+                      aria-label={`Submit ${player.name}'s word`}
+                    >
                       {checking && isActive ? <span className="mini-loader" /> : "→"}
                     </button>
                   </div>
-                  <div id={`feedback-${player.id}`} className="field-feedback" aria-live="polite">
-                    {errors[playerIndex] ? <span className="error-text">{errors[playerIndex]}</span> : <span>{isActive ? "Enter a valid English word." : "This field unlocks on the next turn."}</span>}
+                  <div
+                    id={`feedback-${player.id}`}
+                    className="field-feedback"
+                    role={hasError ? "alert" : undefined}
+                    aria-live="polite"
+                  >
+                    {errors[playerIndex] ? (
+                      <span className="error-text">{errors[playerIndex]}</span>
+                    ) : checking && isActive ? (
+                      <span>Checking word…</span>
+                    ) : (
+                      <span>
+                        {isActive
+                          ? "Enter a valid English word."
+                          : "This field unlocks on the next turn."}
+                      </span>
+                    )}
                   </div>
                   <button
                     className="pass-button"
                     type="button"
                     disabled={!isActive || checking || (game.mode === "machine" && !hasOpeningWord)}
                     onClick={() => passTurn(playerIndex)}
-                    title={game.mode === "machine" && !hasOpeningWord ? "Play the opening word first" : "Pass and lose one point"}
+                    title={
+                      game.mode === "machine" && !hasOpeningWord
+                        ? "Play the opening word first"
+                        : "Pass and lose one point"
+                    }
                   >
                     Pass <span>−1 point</span>
                   </button>
+                  {isActive && (
+                    <p className="pass-tip">Wrong spelling = 0 · Pass = −1</p>
+                  )}
                 </form>
               );
             })}
@@ -408,14 +536,19 @@ export function Game() {
           {machineError && (
             <div className="machine-alert" role="alert">
               <p>{machineError} Your game is safe.</p>
-              <button type="button" onClick={() => askWordBot(game)}>Retry WordBot</button>
+              <button type="button" onClick={() => askWordBot(game)}>
+                Retry WordBot
+              </button>
             </div>
           )}
         </div>
 
         <aside className="history-panel">
           <div className="history-heading">
-            <div><span className="eyebrow">Word trail</span><h2>Words used</h2></div>
+            <div>
+              <span className="eyebrow">Word trail</span>
+              <h2>Words used</h2>
+            </div>
             <span className="word-count">{acceptedWords(game.turns).length}</span>
           </div>
           {game.turns.length ? (
@@ -423,37 +556,53 @@ export function Game() {
               {[...game.turns].reverse().map((turn) => (
                 <li key={turn.id} className={turn.word ? "" : "passed"}>
                   <span className={`history-dot ${turn.playerId}`} aria-hidden="true" />
-                  <div><strong>{turn.word ?? "Passed"}</strong><small>{turn.playerName}</small></div>
+                  <div>
+                    <strong>{turn.word ?? "Passed"}</strong>
+                    <small>{turn.playerName}</small>
+                  </div>
                   <b>{turn.points > 0 ? "+1" : "−1"}</b>
                 </li>
               ))}
             </ol>
           ) : (
-            <div className="empty-history"><span aria-hidden="true">abc</span><p>Your word trail will appear here.</p></div>
+            <div className="empty-history">
+              <span aria-hidden="true">abc</span>
+              <p>Your word trail will appear here.</p>
+            </div>
           )}
         </aside>
       </div>
 
       <div className="rules-strip">
         <strong>How to play</strong>
-        <span><i>1</i> Use the last letter</span>
-        <span><i>2</i> No repeated words</span>
-        <span><i>3</i> Correct word earns +1</span>
+        <span>
+          <i>1</i> Use the last letter
+        </span>
+        <span>
+          <i>2</i> No repeated words
+        </span>
+        <span>
+          <i>3</i> Correct word earns +1
+        </span>
       </div>
 
       {confirmAction && (
-        <div className="dialog-backdrop">
+        <div
+          className="dialog-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setConfirmAction(null);
+          }}
+        >
           <div
             className="confirm-dialog"
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="confirm-title"
             aria-describedby="confirm-description"
-            onKeyDown={(event) => {
-              if (event.key === "Escape") setConfirmAction(null);
-            }}
           >
-            <span className="dialog-icon" aria-hidden="true">↻</span>
+            <span className="dialog-icon" aria-hidden="true">
+              ↻
+            </span>
             <h2 id="confirm-title">
               {confirmAction === "replay" ? "Start a fresh round?" : "Reset everything?"}
             </h2>
@@ -463,7 +612,12 @@ export function Game() {
                 : "Player names, scores, and word history will be removed from this device."}
             </p>
             <div className="dialog-actions">
-              <button type="button" className="ghost-button" onClick={() => setConfirmAction(null)} autoFocus>
+              <button
+                ref={confirmCancelRef}
+                type="button"
+                className="ghost-button"
+                onClick={() => setConfirmAction(null)}
+              >
                 Keep playing
               </button>
               <button
