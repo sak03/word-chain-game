@@ -13,10 +13,12 @@ const structuredData = {
   name: SITE_NAME,
   description: SITE_DESCRIPTION,
   url: PRODUCTION_URL,
+  image: `${PRODUCTION_URL}/og.jpg`,
   applicationCategory: "GameApplication",
   operatingSystem: "Any",
   inLanguage: "en",
   isAccessibleForFree: true,
+  genre: "Word game",
   author: {
     "@type": "Person",
     name: "Sartaj Alam",
