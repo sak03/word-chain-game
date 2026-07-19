@@ -39,14 +39,16 @@ Production deploys from the **`prod`** branch to **Cloudflare Workers** via
 
 ### One-time setup
 
-1. Create a Cloudflare API token with Workers deploy permissions.
+1. Create a Cloudflare API token with **Edit Cloudflare Workers** permission
+   (Account → Workers Scripts: Edit; Zone → Workers Routes: Edit if you attach a domain).
 2. In the GitHub repo → **Settings → Secrets and variables → Actions**, add:
    - `CLOUDFLARE_API_TOKEN`
-   - `CLOUDFLARE_ACCOUNT_ID`
-3. In Cloudflare DNS for `sartajalam.in`, ensure `wordchain` is set up for the
-   Workers custom domain (the workflow deploys with
-   `wordchain.sartajalam.in` configured in `wrangler.jsonc`).
-4. Merge or push to `prod` to ship.
+   - `CLOUDFLARE_ACCOUNT_ID` (Cloudflare dashboard → Workers & Pages → Account ID)
+3. Merge or push to `prod` to ship. First deploy lands on `*.workers.dev`.
+4. Attach the custom domain in Cloudflare:
+   - Workers & Pages → `word-chain-challenge` → **Settings → Domains & Routes**
+   - Add `wordchain.sartajalam.in`
+   - Ensure `sartajalam.in` is on the same Cloudflare account (DNS).
 
 ```bash
 git checkout prod

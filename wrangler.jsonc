@@ -8,12 +8,7 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
-  "routes": [
-    {
-      "pattern": "wordchain.sartajalam.in",
-      "custom_domain": true
-    }
-  ],
+  "workers_dev": true,
   "observability": {
     "enabled": true
   }
