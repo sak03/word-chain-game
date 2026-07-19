@@ -4,15 +4,19 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   STORAGE_KEY,
   LEGACY_STORAGE_KEY,
+  TURN_SECONDS,
+  WRONG_WORD_MESSAGE,
   acceptedWords,
   checkLocalRules,
   createGame,
+  formatTurnPoints,
   GameMode,
   GameState,
   isStoredGame,
   recordTurn,
   replayGame,
   requiredLetter,
+  turnHistoryLabel,
 } from "@/lib/game";
 
 type FieldErrors = Partial<Record<0 | 1, string>>;
@@ -29,6 +33,8 @@ export function Game() {
   const [checking, setChecking] = useState(false);
   const [machineError, setMachineError] = useState("");
   const [successFlash, setSuccessFlash] = useState<0 | 1 | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(TURN_SECONDS);
+  const [paused, setPaused] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"replay" | "reset" | null>(
     null,
   );
@@ -37,8 +43,8 @@ export function Game() {
     null,
   ]);
   const confirmCancelRef = useRef<HTMLButtonElement | null>(null);
+  const pauseResumeRef = useRef<HTMLButtonElement | null>(null);
   const lastFocusRef = useRef<HTMLElement | null>(null);
-
   useEffect(() => {
     try {
       const saved =
@@ -64,9 +70,9 @@ export function Game() {
   }, [game, hydrated]);
 
   useEffect(() => {
-    if (!game || checking || machineError) return;
+    if (!game || checking || machineError || paused) return;
     inputRefs.current[game.currentPlayerIndex]?.focus();
-  }, [checking, game, machineError]);
+  }, [checking, game, machineError, paused]);
 
   useEffect(() => {
     if (!confirmAction) return;
@@ -84,10 +90,42 @@ export function Game() {
   }, [confirmAction]);
 
   useEffect(() => {
+    if (!paused || confirmAction) return;
+    lastFocusRef.current = document.activeElement as HTMLElement | null;
+    pauseResumeRef.current?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setPaused(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      lastFocusRef.current?.focus?.();
+    };
+  }, [paused, confirmAction]);
+
+  useEffect(() => {
+    if (!game) return;
+
+    function onVisibilityChange() {
+      if (document.hidden) setPaused(true);
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [game]);
+
+  useEffect(() => {
     if (successFlash === null) return;
     const timer = window.setTimeout(() => setSuccessFlash(null), 900);
     return () => window.clearTimeout(timer);
   }, [successFlash]);
+
+  useEffect(() => {
+    if (!game) return;
+    if (game.players[game.currentPlayerIndex].isMachine) return;
+    setSecondsLeft(TURN_SECONDS);
+  }, [game?.currentPlayerIndex, game?.turns.length]);
 
   function startGame(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -111,6 +149,8 @@ export function Game() {
     setSetupError("");
     setErrors({});
     setValues(["", ""]);
+    setSecondsLeft(TURN_SECONDS);
+    setPaused(false);
   }
 
   async function askWordBot(gameAfterPlayer: GameState) {
@@ -131,7 +171,15 @@ export function Game() {
       const result = (await response.json()) as { word?: string | null; error?: string };
       if (!response.ok) throw new Error(result.error || "WordBot needs a moment.");
 
-      setGame(recordTurn(gameAfterPlayer, 1, result.word ?? null));
+      setGame(
+        recordTurn(
+          gameAfterPlayer,
+          1,
+          result.word
+            ? { word: result.word, outcome: "accepted" }
+            : { outcome: "pass" },
+        ),
+      );
     } catch (error) {
       setMachineError(
         error instanceof Error ? error.message : "WordBot needs a moment. Please retry.",
@@ -141,13 +189,36 @@ export function Game() {
     }
   }
 
+  function clearPlayerInput(playerIndex: 0 | 1) {
+    setValues((current) => {
+      const next: [string, string] = [...current];
+      next[playerIndex] = "";
+      return next;
+    });
+  }
+
+  async function penalizeWrongWord(playerIndex: 0 | 1) {
+    if (!game) return;
+    const nextGame = recordTurn(game, playerIndex, { outcome: "invalid" });
+    setGame(nextGame);
+    setErrors((current) => ({ ...current, [playerIndex]: WRONG_WORD_MESSAGE }));
+    clearPlayerInput(playerIndex);
+    if (game.mode === "machine" && playerIndex === 0) {
+      await askWordBot(nextGame);
+    }
+  }
+
   async function submitWord(event: FormEvent<HTMLFormElement>, playerIndex: 0 | 1) {
     event.preventDefault();
-    if (!game || checking || game.currentPlayerIndex !== playerIndex) return;
+    if (!game || checking || paused || game.currentPlayerIndex !== playerIndex) return;
 
     const localResult = checkLocalRules(values[playerIndex], game.turns);
     if (!localResult.valid) {
-      setErrors((current) => ({ ...current, [playerIndex]: localResult.message }));
+      if (localResult.message === "Type a word first.") {
+        setErrors((current) => ({ ...current, [playerIndex]: localResult.message }));
+        return;
+      }
+      await penalizeWrongWord(playerIndex);
       return;
     }
 
@@ -163,21 +234,27 @@ export function Game() {
       if (!response.ok) throw new Error(result.error || "Could not check that word.");
 
       if (!result.valid) {
+        const nextGame = recordTurn(game, playerIndex, { outcome: "invalid" });
+        setGame(nextGame);
         setErrors((current) => ({
           ...current,
-          [playerIndex]: `“${localResult.word}” is not in our English dictionary. Check the spelling or pass.`,
+          [playerIndex]: WRONG_WORD_MESSAGE,
         }));
+        clearPlayerInput(playerIndex);
+        if (game.mode === "machine" && playerIndex === 0) {
+          setChecking(false);
+          await askWordBot(nextGame);
+        }
         return;
       }
 
-      const nextGame = recordTurn(game, playerIndex, localResult.word);
+      const nextGame = recordTurn(game, playerIndex, {
+        word: localResult.word,
+        outcome: "accepted",
+      });
       setGame(nextGame);
       setSuccessFlash(playerIndex);
-      setValues((current) => {
-        const next: [string, string] = [...current];
-        next[playerIndex] = "";
-        return next;
-      });
+      clearPlayerInput(playerIndex);
       if (game.mode === "machine" && playerIndex === 0) {
         setChecking(false);
         await askWordBot(nextGame);
@@ -196,17 +273,44 @@ export function Game() {
   }
 
   async function passTurn(playerIndex: 0 | 1) {
-    if (!game || checking || game.currentPlayerIndex !== playerIndex) return;
-    const nextGame = recordTurn(game, playerIndex, null);
+    if (!game || checking || paused || game.currentPlayerIndex !== playerIndex) return;
+    const nextGame = recordTurn(game, playerIndex, { outcome: "pass" });
     setGame(nextGame);
     setErrors((current) => ({ ...current, [playerIndex]: "" }));
-    setValues((current) => {
-      const next: [string, string] = [...current];
-      next[playerIndex] = "";
-      return next;
-    });
+    clearPlayerInput(playerIndex);
     if (game.mode === "machine" && playerIndex === 0) await askWordBot(nextGame);
   }
+
+  useEffect(() => {
+    if (!game || checking || machineError || paused) return;
+    if (game.players[game.currentPlayerIndex].isMachine) return;
+    if (secondsLeft <= 0) return;
+
+    const timer = window.setTimeout(() => {
+      setSecondsLeft((current) => current - 1);
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [game, checking, machineError, paused, secondsLeft]);
+
+  useEffect(() => {
+    if (!game || checking || machineError || paused) return;
+    const activeIndex = game.currentPlayerIndex;
+    if (game.players[activeIndex].isMachine) return;
+    if (secondsLeft !== 0) return;
+
+    setSecondsLeft(TURN_SECONDS);
+    const nextGame = recordTurn(game, activeIndex, { outcome: "timeout" });
+    setGame(nextGame);
+    setErrors((current) => ({ ...current, [activeIndex]: "" }));
+    setValues((current) => {
+      const next: [string, string] = [...current];
+      next[activeIndex] = "";
+      return next;
+    });
+    if (game.mode === "machine" && activeIndex === 0) {
+      void askWordBot(nextGame);
+    }
+  }, [secondsLeft, game, checking, machineError, paused]);
 
   function playAgain() {
     if (!game) return;
@@ -215,6 +319,8 @@ export function Game() {
     setErrors({});
     setMachineError("");
     setSuccessFlash(null);
+    setSecondsLeft(TURN_SECONDS);
+    setPaused(false);
     setConfirmAction(null);
   }
 
@@ -226,6 +332,8 @@ export function Game() {
     setErrors({});
     setMachineError("");
     setSuccessFlash(null);
+    setSecondsLeft(TURN_SECONDS);
+    setPaused(false);
     setConfirmAction(null);
   }
 
@@ -257,10 +365,10 @@ export function Game() {
               <b>+1</b> correct word
             </span>
             <span>
-              <b>−1</b> pass
+              <b>0</b> pass / timeout
             </span>
             <span>
-              <b>0</b> spelling error
+              <b>−1</b> wrong word
             </span>
           </div>
         </div>
@@ -342,9 +450,12 @@ export function Game() {
 
   const letter = requiredLetter(game.turns);
   const hasOpeningWord = acceptedWords(game.turns).length > 0;
+  const activePlayer = game.players[game.currentPlayerIndex];
+  const showTimer = !activePlayer.isMachine && !machineError;
+  const timerUrgent = secondsLeft <= 5 && !paused;
 
   return (
-    <section className="game-section">
+    <section className={`game-section ${paused ? "is-paused" : ""}`}>
       <div className="game-topbar">
         <div>
           <span className="eyebrow">
@@ -353,6 +464,14 @@ export function Game() {
           <h1>Keep the chain going!</h1>
         </div>
         <div className="game-actions">
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setPaused(true)}
+            disabled={paused}
+          >
+            Pause
+          </button>
           <button type="button" className="ghost-button" onClick={() => setConfirmAction("replay")}>
             Play again
           </button>
@@ -405,6 +524,15 @@ export function Game() {
                 <strong>ANY</strong>
                 <span>letter</span>
               </>
+            )}
+            {showTimer && (
+              <span
+                className={`turn-timer ${timerUrgent ? "urgent" : ""} ${paused ? "is-paused" : ""}`}
+                aria-live="polite"
+                aria-label={paused ? "Timer paused" : `${secondsLeft} seconds left`}
+              >
+                {paused ? "Paused" : `0:${String(secondsLeft).padStart(2, "0")}`}
+              </span>
             )}
           </div>
 
@@ -477,7 +605,7 @@ export function Game() {
                             ? `${letter.toUpperCase()}…`
                             : "Type any word…"
                       }
-                      disabled={!isActive || isMachine || checking}
+                      disabled={!isActive || isMachine || checking || paused}
                       autoCapitalize="none"
                       autoCorrect="off"
                       spellCheck="false"
@@ -488,7 +616,7 @@ export function Game() {
                     <button
                       className="submit-word"
                       type="submit"
-                      disabled={!isActive || checking}
+                      disabled={!isActive || checking || paused}
                       aria-label={`Submit ${player.name}'s word`}
                     >
                       {checking && isActive ? <span className="mini-loader" /> : "→"}
@@ -515,18 +643,18 @@ export function Game() {
                   <button
                     className="pass-button"
                     type="button"
-                    disabled={!isActive || checking || (game.mode === "machine" && !hasOpeningWord)}
+                    disabled={!isActive || checking || paused || (game.mode === "machine" && !hasOpeningWord)}
                     onClick={() => passTurn(playerIndex)}
                     title={
                       game.mode === "machine" && !hasOpeningWord
                         ? "Play the opening word first"
-                        : "Pass and lose one point"
+                        : "Pass with 0 points"
                     }
                   >
-                    Pass <span>−1 point</span>
+                    Pass <span>0 points</span>
                   </button>
                   {isActive && (
-                    <p className="pass-tip">Wrong spelling = 0 · Pass = −1</p>
+                    <p className="pass-tip">Wrong word = −1 · Pass / timeout = 0</p>
                   )}
                 </form>
               );
@@ -552,18 +680,40 @@ export function Game() {
             <span className="word-count">{acceptedWords(game.turns).length}</span>
           </div>
           {game.turns.length ? (
-            <ol className="word-history">
-              {[...game.turns].reverse().map((turn) => (
-                <li key={turn.id} className={turn.word ? "" : "passed"}>
-                  <span className={`history-dot ${turn.playerId}`} aria-hidden="true" />
-                  <div>
-                    <strong>{turn.word ?? "Passed"}</strong>
-                    <small>{turn.playerName}</small>
-                  </div>
-                  <b>{turn.points > 0 ? "+1" : "−1"}</b>
-                </li>
-              ))}
-            </ol>
+            <div className="history-columns">
+              {game.players.map((player, index) => {
+                const playerTurns = [...game.turns]
+                  .filter((turn) => turn.playerId === player.id)
+                  .reverse();
+
+                return (
+                  <section
+                    className={`history-column player-${index + 1}`}
+                    key={player.id}
+                    aria-label={`${player.name}'s words`}
+                  >
+                    <h3>
+                      <span className={`history-dot ${player.id}`} aria-hidden="true" />
+                      {player.name}
+                    </h3>
+                    {playerTurns.length ? (
+                      <ol className="word-history">
+                        {playerTurns.map((turn) => (
+                          <li key={turn.id} className={turn.word ? "" : "passed"}>
+                            <div>
+                              <strong>{turnHistoryLabel(turn)}</strong>
+                            </div>
+                            <b>{formatTurnPoints(turn.points)}</b>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="history-column-empty">No words yet</p>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
           ) : (
             <div className="empty-history">
               <span aria-hidden="true">abc</span>
@@ -576,15 +726,62 @@ export function Game() {
       <div className="rules-strip">
         <strong>How to play</strong>
         <span>
-          <i>1</i> Use the last letter
+          <i>1</i> 30s per turn
         </span>
         <span>
-          <i>2</i> No repeated words
+          <i>2</i> Correct word +1
         </span>
         <span>
-          <i>3</i> Correct word earns +1
+          <i>3</i> Wrong word −1
+        </span>
+        <span>
+          <i>4</i> Pass / timeout 0
         </span>
       </div>
+
+      {paused && !confirmAction && (
+        <div className="dialog-backdrop pause-backdrop">
+          <div
+            className="confirm-dialog pause-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="pause-title"
+            aria-describedby="pause-description"
+          >
+            <span className="dialog-icon" aria-hidden="true">
+              ❚❚
+            </span>
+            <h2 id="pause-title">Game paused</h2>
+            <p id="pause-description">
+              The timer is frozen. Resume to keep your remaining time, or start fresh.
+            </p>
+            <div className="dialog-actions pause-actions">
+              <button
+                ref={pauseResumeRef}
+                type="button"
+                className="primary-button"
+                onClick={() => setPaused(false)}
+              >
+                Resume
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setConfirmAction("replay")}
+              >
+                Play again
+              </button>
+              <button
+                type="button"
+                className="ghost-button danger"
+                onClick={() => setConfirmAction("reset")}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmAction && (
         <div
