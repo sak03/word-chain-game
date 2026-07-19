@@ -1,5 +1,6 @@
 export type GameMode = "machine" | "friend";
 export type GamePhase = "setup" | "playing";
+export type TurnOutcome = "accepted" | "pass" | "timeout" | "invalid";
 
 export interface Player {
   id: "player-one" | "player-two";
@@ -13,9 +14,14 @@ export interface WordTurn {
   playerId: Player["id"];
   playerName: string;
   word: string | null;
-  points: 1 | -1;
+  points: 1 | 0 | -1;
+  outcome: TurnOutcome;
   createdAt: string;
 }
+
+export type TurnInput =
+  | { word: string; outcome: "accepted" }
+  | { word?: null; outcome: "pass" | "timeout" | "invalid" };
 
 export interface GameState {
   version: 1;
@@ -28,6 +34,15 @@ export interface GameState {
 
 export const STORAGE_KEY = "word-chain-challenge:v1";
 export const LEGACY_STORAGE_KEY = "word-chai-challenge:v1";
+export const TURN_SECONDS = 30;
+export const WRONG_WORD_MESSAGE = "You entered a wrong word.";
+
+const OUTCOME_POINTS: Record<TurnOutcome, 1 | 0 | -1> = {
+  accepted: 1,
+  pass: 0,
+  timeout: 0,
+  invalid: -1,
+};
 
 export function normalizeWord(value: string): string {
   return value.trim().toLowerCase();
@@ -113,9 +128,10 @@ export function createGame(
 export function recordTurn(
   game: GameState,
   playerIndex: 0 | 1,
-  word: string | null,
+  input: TurnInput,
 ): GameState {
-  const points = word ? 1 : -1;
+  const points = OUTCOME_POINTS[input.outcome];
+  const word = input.outcome === "accepted" ? input.word : null;
   const player = game.players[playerIndex];
   const players = game.players.map((item, index) =>
     index === playerIndex ? { ...item, score: item.score + points } : item,
@@ -133,10 +149,24 @@ export function recordTurn(
         playerName: player.name,
         word,
         points,
+        outcome: input.outcome,
         createdAt: new Date().toISOString(),
       },
     ],
   };
+}
+
+export function turnHistoryLabel(turn: WordTurn): string {
+  if (turn.word) return turn.word;
+  if (turn.outcome === "timeout") return "Timed out";
+  if (turn.outcome === "invalid") return "Wrong word";
+  return "Passed";
+}
+
+export function formatTurnPoints(points: WordTurn["points"]): string {
+  if (points > 0) return "+1";
+  if (points < 0) return "−1";
+  return "0";
 }
 
 export function replayGame(game: GameState): GameState {
