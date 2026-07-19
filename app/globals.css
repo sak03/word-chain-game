@@ -220,9 +220,7 @@ html[data-theme="dark"] .theme-toggle .sun-icon { display: inline; }
 .site-footer a { text-underline-offset: 3px; }
 .site-footer a:hover { color: var(--blue); }
 
-.loading-card { min-height: calc(100vh - 178px); display: grid; place-content: center; justify-items: center; gap: 14px; color: var(--muted); }
-.loader, .mini-loader { display: inline-block; border: 3px solid var(--line); border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite; }
-.loader { width: 34px; height: 34px; }
+.mini-loader { display: inline-block; border: 3px solid var(--line); border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite; }
 .mini-loader { width: 19px; height: 19px; border-color: rgba(255,255,255,.45); border-top-color: white; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -295,6 +293,32 @@ html[data-theme="dark"] .theme-toggle .sun-icon { display: inline; }
 .rules-strip strong { color: var(--ink); font-family: var(--font-display), sans-serif; }
 .rules-strip span { display: flex; align-items: center; gap: 7px; }
 .rules-strip i { display: grid; place-items: center; width: 21px; height: 21px; border-radius: 50%; color: var(--blue); background: var(--blue-soft); font-style: normal; font-weight: 900; }
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(7, 20, 38, .58);
+  backdrop-filter: blur(5px);
+}
+.confirm-dialog {
+  width: min(430px, 100%);
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .3);
+  text-align: center;
+}
+.dialog-icon { display: grid; place-items: center; width: 52px; height: 52px; margin: 0 auto 16px; border-radius: 16px; color: var(--blue); background: var(--blue-soft); font-size: 25px; font-weight: 900; }
+.confirm-dialog h2 { margin: 0; font: 800 25px/1.2 var(--font-display), sans-serif; }
+.confirm-dialog p { margin: 10px auto 24px; color: var(--muted); line-height: 1.55; }
+.dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dialog-actions button { height: 46px; }
+.dialog-actions .reset-confirm { background: var(--danger); box-shadow: 0 12px 22px color-mix(in srgb, var(--danger) 24%, transparent); }
 
 .legal-page { width: min(850px, calc(100% - 48px)); margin: 0 auto; padding: 48px 0 90px; }
 .back-link { display: inline-block; margin-bottom: 38px; color: var(--blue); font-weight: 900; font-size: 13px; text-underline-offset: 4px; }

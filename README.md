@@ -1,4 +1,4 @@
-# Word Chai Challenge
+# Word Chain Challenge
 
 A child-friendly, responsive Word Chain game built with Next.js. Play against
 WordBot or take turns with a friend on the same device.

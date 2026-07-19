@@ -26,7 +26,8 @@ export interface GameState {
   turns: WordTurn[];
 }
 
-export const STORAGE_KEY = "word-chai-challenge:v1";
+export const STORAGE_KEY = "word-chain-challenge:v1";
+export const LEGACY_STORAGE_KEY = "word-chai-challenge:v1";
 
 export function normalizeWord(value: string): string {
   return value.trim().toLowerCase();

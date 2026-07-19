@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   STORAGE_KEY,
+  LEGACY_STORAGE_KEY,
   acceptedWords,
   checkLocalRules,
   createGame,
@@ -27,6 +28,9 @@ export function Game() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [checking, setChecking] = useState(false);
   const [machineError, setMachineError] = useState("");
+  const [confirmAction, setConfirmAction] = useState<"replay" | "reset" | null>(
+    null,
+  );
   const inputRefs = useRef<[HTMLInputElement | null, HTMLInputElement | null]>([
     null,
     null,
@@ -34,13 +38,16 @@ export function Game() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved =
+        localStorage.getItem(STORAGE_KEY) ??
+        localStorage.getItem(LEGACY_STORAGE_KEY);
       if (saved) {
         const parsed: unknown = JSON.parse(saved);
         if (isStoredGame(parsed)) setGame(parsed);
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     } finally {
       setHydrated(true);
     }
@@ -50,6 +57,7 @@ export function Game() {
     if (!hydrated) return;
     if (game) localStorage.setItem(STORAGE_KEY, JSON.stringify(game));
     else localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
   }, [game, hydrated]);
 
   useEffect(() => {
@@ -181,6 +189,7 @@ export function Game() {
     setValues(["", ""]);
     setErrors({});
     setMachineError("");
+    setConfirmAction(null);
   }
 
   function resetGame() {
@@ -190,15 +199,7 @@ export function Game() {
     setValues(["", ""]);
     setErrors({});
     setMachineError("");
-  }
-
-  if (!hydrated) {
-    return (
-      <section className="loading-card" aria-label="Loading saved game">
-        <span className="loader" aria-hidden="true" />
-        <p>Loading your game…</p>
-      </section>
-    );
+    setConfirmAction(null);
   }
 
   if (!game) {
@@ -292,8 +293,8 @@ export function Game() {
           <h1>Keep the chain going!</h1>
         </div>
         <div className="game-actions">
-          <button type="button" className="ghost-button" onClick={playAgain}>Play again</button>
-          <button type="button" className="ghost-button danger" onClick={resetGame}>Reset</button>
+          <button type="button" className="ghost-button" onClick={() => setConfirmAction("replay")}>Play again</button>
+          <button type="button" className="ghost-button danger" onClick={() => setConfirmAction("reset")}>Reset</button>
         </div>
       </div>
 
@@ -439,6 +440,43 @@ export function Game() {
         <span><i>2</i> No repeated words</span>
         <span><i>3</i> Correct word earns +1</span>
       </div>
+
+      {confirmAction && (
+        <div className="dialog-backdrop">
+          <div
+            className="confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
+            aria-describedby="confirm-description"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setConfirmAction(null);
+            }}
+          >
+            <span className="dialog-icon" aria-hidden="true">↻</span>
+            <h2 id="confirm-title">
+              {confirmAction === "replay" ? "Start a fresh round?" : "Reset everything?"}
+            </h2>
+            <p id="confirm-description">
+              {confirmAction === "replay"
+                ? "Scores and word history will be cleared. Player names will stay."
+                : "Player names, scores, and word history will be removed from this device."}
+            </p>
+            <div className="dialog-actions">
+              <button type="button" className="ghost-button" onClick={() => setConfirmAction(null)} autoFocus>
+                Keep playing
+              </button>
+              <button
+                type="button"
+                className={`primary-button ${confirmAction === "reset" ? "reset-confirm" : ""}`}
+                onClick={confirmAction === "replay" ? playAgain : resetGame}
+              >
+                {confirmAction === "replay" ? "Play again" : "Yes, reset"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

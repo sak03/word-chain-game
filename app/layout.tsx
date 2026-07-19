@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -7,26 +8,52 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
   const metadataBase = new URL(host ? `${protocol}://${host}` : "http://localhost:3000");
-  const description =
-    "A playful word-chain game for kids. Challenge WordBot or take turns with a friend.";
-
   return {
     metadataBase,
+    applicationName: SITE_NAME,
     title: {
-      default: "Word Chai Challenge",
-      template: "%s | Word Chai Challenge",
+      default: SITE_NAME,
+      template: `%s | ${SITE_NAME}`,
     },
-    description,
+    description: SITE_DESCRIPTION,
+    keywords: [
+      "word chain game",
+      "word game for kids",
+      "English vocabulary game",
+      "two player word game",
+      "educational word game",
+      "online word antakshari",
+    ],
+    authors: [{ name: "Sartaj Alam", url: "https://sartajalam.in" }],
+    creator: "Sartaj Alam",
+    publisher: SITE_NAME,
+    category: "games",
+    referrer: "origin-when-cross-origin",
+    formatDetection: { email: false, address: false, telephone: false },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
+    },
     openGraph: {
-      title: "Word Chai Challenge",
-      description,
+      title: SITE_NAME,
+      description: SITE_DESCRIPTION,
       type: "website",
+      siteName: SITE_NAME,
+      locale: "en_US",
+      url: metadataBase,
       images: [{ url: "/og.png", width: 1536, height: 1024 }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Word Chai Challenge",
-      description,
+      title: SITE_NAME,
+      description: SITE_DESCRIPTION,
       images: ["/og.png"],
     },
   };
@@ -34,9 +61,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const themeScript = `
   try {
-    const saved = localStorage.getItem('word-chai-theme');
+    const saved = localStorage.getItem('word-chain-theme') || localStorage.getItem('word-chai-theme');
     const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     document.documentElement.dataset.theme = theme;
+    if (saved) localStorage.setItem('word-chain-theme', saved);
+    localStorage.removeItem('word-chai-theme');
   } catch {}
 `;
 
